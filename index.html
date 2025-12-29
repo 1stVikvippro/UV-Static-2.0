@@ -2,24 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Loading…</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Cache-Control" content="no-store" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
+  <title>Proxy</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
 </head>
 <body>
 
-<script>
-  (function () {
-    const hash = window.location.hash || "";
-    window.location.replace("/active/" + hash);
-  })();
-</script>
+<iframe id="proxyFrame" src=""></iframe>
 
-<noscript>
-  <meta http-equiv="refresh" content="0; url=/active/" />
-</noscript>
+<script src="uv/uv.bundle.js" defer></script>
+<script src="uv/uv.config.js" defer></script>
+
+<script>
+  window.addEventListener('load', () => {
+    const iframe = document.getElementById('proxyFrame');
+    const hash = location.hash.slice(1); // remove '#'
+    if (!hash) {
+      iframe.src = ''; // optionally load a default page
+      return;
+    }
+
+    // Normalize URL
+    let url;
+    try {
+      url = new URL(hash.startsWith('http') ? hash : 'https://' + hash);
+    } catch {
+      iframe.src = ''; // invalid URL fallback
+      return;
+    }
+
+    // Use UV static encodeUrl to rewrite
+    if (typeof uv !== 'undefined' && uv.encodeUrl) {
+      iframe.src = uv.encodeUrl(url.href);
+    } else {
+      iframe.src = url.href; // fallback
+    }
+  });
+</script>
 
 </body>
 </html>
