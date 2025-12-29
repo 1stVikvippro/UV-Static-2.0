@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proxy Loader</title>
     
-    <!-- Load UV bundle and config from active/uv directory -->
+    <!-- Load UV bundle and config -->
     <script src="active/uv/uv.bundle.js"></script>
     <script src="active/uv/uv.config.js"></script>
     
@@ -44,7 +44,6 @@
             padding: 40px 20px;
             color: #e0e0e0;
             height: 100vh;
-            display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -72,7 +71,7 @@
     <div id="loading-message">Loading proxy...</div>
     <iframe id="proxy-frame" style="display: none;"></iframe>
 
-    <div id="error-message" style="display: none;">
+    <div id="error-message">
         <h2>No URL Provided</h2>
         <p>Please access this page with a URL in the hash.</p>
         <p>Example: <code>proxy.html#https://example.com</code></p>
@@ -82,14 +81,15 @@
     <script>
         async function registerServiceWorker() {
             try {
-                // Register the UV service worker
-                await navigator.serviceWorker.register('./active/uv/uv.sw.js', {
-                    scope: __uv$config.prefix
+                // Register the service worker at active/uv/sw.js
+                const registration = await navigator.serviceWorker.register('/active/uv/sw.js', {
+                    scope: '/active/uv/service/'
                 });
                 
                 // Wait for service worker to be ready
                 await navigator.serviceWorker.ready;
                 
+                console.log('Service worker registered successfully');
                 return true;
             } catch (err) {
                 console.error('Service worker registration failed:', err);
@@ -117,15 +117,8 @@
             
             try {
                 // Wait for UV config to load
-                if (!window.__uv$config) {
-                    await new Promise(resolve => {
-                        const check = setInterval(() => {
-                            if (window.__uv$config) {
-                                clearInterval(check);
-                                resolve();
-                            }
-                        }, 50);
-                    });
+                while (!window.__uv$config) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
                 // Register service worker
@@ -135,11 +128,14 @@
                     throw new Error('Service worker registration failed');
                 }
 
-                // Get the prefix from UV config
-                const prefix = window.__uv$config.prefix;
-                
                 // Encode the URL using UV's encoding
-                const proxyUrl = prefix + __uv$config.encodeUrl(targetUrl);
+                const encodedUrl = __uv$config.encodeUrl(targetUrl);
+                
+                // Build the full proxy URL
+                const proxyUrl = __uv$config.prefix + encodedUrl;
+                
+                console.log('Loading URL:', targetUrl);
+                console.log('Proxy URL:', proxyUrl);
                 
                 // Load in iframe
                 document.getElementById('loading-message').style.display = 'none';
