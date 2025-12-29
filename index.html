@@ -6,8 +6,8 @@
     <title>Proxy Loader</title>
     
     <!-- Load UV bundle and config from active/uv directory -->
-    <script src="active/uv/uv.bundle.js" defer></script>
-    <script src="active/uv/uv.config.js" defer></script>
+    <script src="active/uv/uv.bundle.js"></script>
+    <script src="active/uv/uv.config.js"></script>
     
     <style>
         * {
@@ -29,11 +29,25 @@
             display: block;
         }
 
+        #loading-message {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
         #error-message {
             display: none;
             text-align: center;
             padding: 40px 20px;
             color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         #error-message h2 {
@@ -55,22 +69,41 @@
     </style>
 </head>
 <body>
-    <iframe id="proxy-frame"></iframe>
+    <div id="loading-message">Loading proxy...</div>
+    <iframe id="proxy-frame" style="display: none;"></iframe>
 
-    <div id="error-message">
+    <div id="error-message" style="display: none;">
         <h2>No URL Provided</h2>
         <p>Please access this page with a URL in the hash.</p>
         <p>Example: <code>proxy.html#https://example.com</code></p>
+        <p>Or: <code>proxy.html#google.com</code></p>
     </div>
 
     <script>
-        function loadProxyUrl() {
+        async function registerServiceWorker() {
+            try {
+                // Register the UV service worker
+                await navigator.serviceWorker.register('./active/uv/uv.sw.js', {
+                    scope: __uv$config.prefix
+                });
+                
+                // Wait for service worker to be ready
+                await navigator.serviceWorker.ready;
+                
+                return true;
+            } catch (err) {
+                console.error('Service worker registration failed:', err);
+                return false;
+            }
+        }
+
+        async function loadProxyUrl() {
             // Get the URL from the hash (everything after #)
             const hash = window.location.hash.substring(1);
             
             if (!hash) {
-                document.getElementById('proxy-frame').style.display = 'none';
-                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('loading-message').style.display = 'none';
+                document.getElementById('error-message').style.display = 'flex';
                 return;
             }
 
@@ -82,42 +115,53 @@
                 targetUrl = 'https://' + targetUrl;
             }
             
-            // Use __uv$config to get the correct prefix from uv.config.js
-            // Wait for UV to load
-            const checkUV = setInterval(() => {
-                if (window.__uv$config) {
-                    clearInterval(checkUV);
-                    
-                    // Get the prefix from UV config (usually '/service/')
-                    const prefix = window.__uv$config.prefix || '/service/';
-                    
-                    // Encode the URL using UV's encoding
-                    const proxyUrl = prefix + __uv$config.encodeUrl(targetUrl);
-                    
-                    document.getElementById('proxy-frame').src = proxyUrl;
-                    document.getElementById('proxy-frame').style.display = 'block';
-                    document.getElementById('error-message').style.display = 'none';
-                }
-            }, 50);
-            
-            // Timeout after 5 seconds if UV doesn't load
-            setTimeout(() => {
-                clearInterval(checkUV);
+            try {
+                // Wait for UV config to load
                 if (!window.__uv$config) {
-                    // Fallback: try basic path
-                    const proxyUrl = '/service/' + encodeURIComponent(targetUrl);
-                    document.getElementById('proxy-frame').src = proxyUrl;
-                    document.getElementById('proxy-frame').style.display = 'block';
-                    document.getElementById('error-message').style.display = 'none';
+                    await new Promise(resolve => {
+                        const check = setInterval(() => {
+                            if (window.__uv$config) {
+                                clearInterval(check);
+                                resolve();
+                            }
+                        }, 50);
+                    });
                 }
-            }, 5000);
+
+                // Register service worker
+                const swRegistered = await registerServiceWorker();
+                
+                if (!swRegistered) {
+                    throw new Error('Service worker registration failed');
+                }
+
+                // Get the prefix from UV config
+                const prefix = window.__uv$config.prefix;
+                
+                // Encode the URL using UV's encoding
+                const proxyUrl = prefix + __uv$config.encodeUrl(targetUrl);
+                
+                // Load in iframe
+                document.getElementById('loading-message').style.display = 'none';
+                document.getElementById('proxy-frame').style.display = 'block';
+                document.getElementById('proxy-frame').src = proxyUrl;
+                
+            } catch (err) {
+                console.error('Error loading proxy:', err);
+                document.getElementById('loading-message').innerHTML = 
+                    '<div style="text-align: center;"><h2 style="color: #ff6b6b;">Error Loading Proxy</h2><p>' + err.message + '</p></div>';
+            }
         }
 
         // Load URL on page load
         window.addEventListener('load', loadProxyUrl);
 
         // Reload if hash changes
-        window.addEventListener('hashchange', loadProxyUrl);
+        window.addEventListener('hashchange', () => {
+            document.getElementById('loading-message').style.display = 'flex';
+            document.getElementById('proxy-frame').style.display = 'none';
+            loadProxyUrl();
+        });
     </script>
 </body>
 </html>
