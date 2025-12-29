@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proxy Loader</title>
+    
+    <!-- Load UV bundle and config from active/uv directory -->
+    <script src="active/uv/uv.bundle.js" defer></script>
+    <script src="active/uv/uv.config.js" defer></script>
+    
     <style>
         * {
             margin: 0;
@@ -55,7 +60,7 @@
     <div id="error-message">
         <h2>No URL Provided</h2>
         <p>Please access this page with a URL in the hash.</p>
-        <p>Example: <code>index.html#https://example.com</code></p>
+        <p>Example: <code>proxy.html#https://example.com</code></p>
     </div>
 
     <script>
@@ -70,20 +75,46 @@
             }
 
             // Decode the URL in case it's encoded
-            const targetUrl = decodeURIComponent(hash);
+            let targetUrl = decodeURIComponent(hash);
             
-            // Load the URL in the iframe
-            // Assuming your proxy processes URLs through the /service/ path
-            // Adjust this path based on your proxy configuration
-            const proxyUrl = '/service/' + encodeURIComponent(targetUrl);
-            document.getElementById('proxy-frame').src = proxyUrl;
+            // Add https:// if no protocol is specified
+            if (!targetUrl.match(/^https?:\/\//i)) {
+                targetUrl = 'https://' + targetUrl;
+            }
             
-            document.getElementById('proxy-frame').style.display = 'block';
-            document.getElementById('error-message').style.display = 'none';
+            // Use __uv$config to get the correct prefix from uv.config.js
+            // Wait for UV to load
+            const checkUV = setInterval(() => {
+                if (window.__uv$config) {
+                    clearInterval(checkUV);
+                    
+                    // Get the prefix from UV config (usually '/service/')
+                    const prefix = window.__uv$config.prefix || '/service/';
+                    
+                    // Encode the URL using UV's encoding
+                    const proxyUrl = prefix + __uv$config.encodeUrl(targetUrl);
+                    
+                    document.getElementById('proxy-frame').src = proxyUrl;
+                    document.getElementById('proxy-frame').style.display = 'block';
+                    document.getElementById('error-message').style.display = 'none';
+                }
+            }, 50);
+            
+            // Timeout after 5 seconds if UV doesn't load
+            setTimeout(() => {
+                clearInterval(checkUV);
+                if (!window.__uv$config) {
+                    // Fallback: try basic path
+                    const proxyUrl = '/service/' + encodeURIComponent(targetUrl);
+                    document.getElementById('proxy-frame').src = proxyUrl;
+                    document.getElementById('proxy-frame').style.display = 'block';
+                    document.getElementById('error-message').style.display = 'none';
+                }
+            }, 5000);
         }
 
         // Load URL on page load
-        loadProxyUrl();
+        window.addEventListener('load', loadProxyUrl);
 
         // Reload if hash changes
         window.addEventListener('hashchange', loadProxyUrl);
