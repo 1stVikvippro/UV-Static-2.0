@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proxy Loader</title>
     
-    <!-- Load UV bundle and config -->
-    <script src="active/uv/uv.bundle.js"></script>
-    <script src="active/uv/uv.config.js"></script>
-    
     <style>
         * {
             margin: 0;
@@ -78,27 +74,48 @@
         <p>Or: <code>proxy.html#google.com</code></p>
     </div>
 
-    <script>
-        async function registerServiceWorker() {
+    <script src="active/uv/uv.bundle.js"></script>
+    <script src="active/uv/uv.config.js"></script>
+    <script type="module">
+        import { registerSW } from "/active/prxy/register-sw.mjs";
+        import * as BareMux from "/active/prxy/baremux/index.mjs";
+
+        const connection = new BareMux.BareMuxConnection("/active/prxy/baremux/worker.js");
+
+        function search(input) {
             try {
-                // Register the service worker at active/uv/sw.js
-                const registration = await navigator.serviceWorker.register('/active/uv/sw.js', {
-                    scope: '/active/uv/service/'
-                });
-                
-                // Wait for service worker to be ready
-                await navigator.serviceWorker.ready;
-                
-                console.log('Service worker registered successfully');
-                return true;
+                return new URL(input).toString();
+            } catch (err) {}
+            try {
+                const url = new URL(`http://${input}`);
+                if (url.hostname.includes(".")) return url.toString();
+            } catch (err) {}
+            return `https://html.duckduckgo.com/html?t=h_&q=${encodeURIComponent(input)}`;
+        }
+
+        async function getUV(input) {
+            try {
+                await registerSW();
+                console.log("Service worker registered successfully");
             } catch (err) {
-                console.error('Service worker registration failed:', err);
-                return false;
+                console.error("SW failed to register:", err);
+                throw err;
             }
+
+            let url = search(input);
+            let wispUrl = "wss://wisp.rhw.one/";
+
+            if ((await connection.getTransport()) !== "/active/prxy/epoxy/index.mjs") {
+                await connection.setTransport("/active/prxy/epoxy/index.mjs", [
+                    { wisp: wispUrl },
+                ]);
+            }
+
+            let viewUrl = __uv$config.prefix + __uv$config.encodeUrl(url);
+            return viewUrl;
         }
 
         async function loadProxyUrl() {
-            // Get the URL from the hash (everything after #)
             const hash = window.location.hash.substring(1);
             
             if (!hash) {
@@ -107,37 +124,18 @@
                 return;
             }
 
-            // Decode the URL in case it's encoded
             let targetUrl = decodeURIComponent(hash);
             
-            // Add https:// if no protocol is specified
             if (!targetUrl.match(/^https?:\/\//i)) {
                 targetUrl = 'https://' + targetUrl;
             }
             
             try {
-                // Wait for UV config to load
-                while (!window.__uv$config) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
-
-                // Register service worker
-                const swRegistered = await registerServiceWorker();
-                
-                if (!swRegistered) {
-                    throw new Error('Service worker registration failed');
-                }
-
-                // Encode the URL using UV's encoding
-                const encodedUrl = __uv$config.encodeUrl(targetUrl);
-                
-                // Build the full proxy URL
-                const proxyUrl = __uv$config.prefix + encodedUrl;
+                const proxyUrl = await getUV(targetUrl);
                 
                 console.log('Loading URL:', targetUrl);
                 console.log('Proxy URL:', proxyUrl);
                 
-                // Load in iframe
                 document.getElementById('loading-message').style.display = 'none';
                 document.getElementById('proxy-frame').style.display = 'block';
                 document.getElementById('proxy-frame').src = proxyUrl;
@@ -149,10 +147,8 @@
             }
         }
 
-        // Load URL on page load
         window.addEventListener('load', loadProxyUrl);
 
-        // Reload if hash changes
         window.addEventListener('hashchange', () => {
             document.getElementById('loading-message').style.display = 'flex';
             document.getElementById('proxy-frame').style.display = 'none';
