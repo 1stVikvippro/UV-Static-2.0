@@ -1,59 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Loading…</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Loader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        #proxy-frame {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            display: block;
+        }
+
+        #error-message {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            color: #e0e0e0;
+        }
+
+        #error-message h2 {
+            margin-bottom: 10px;
+            color: #ff6b6b;
+        }
+
+        #error-message p {
+            color: #999;
+            margin-bottom: 20px;
+        }
+
+        #error-message code {
+            background: #2a2a2a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #5a32e3;
+        }
+    </style>
 </head>
 <body>
+    <iframe id="proxy-frame"></iframe>
 
-<iframe id="frame"></iframe>
+    <div id="error-message">
+        <h2>No URL Provided</h2>
+        <p>Please access this page with a URL in the hash.</p>
+        <p>Example: <code>index.html#https://example.com</code></p>
+    </div>
 
-<script src="/active/uv/uv.bundle.js"></script>
-<script src="/active/uv/uv.config.js"></script>
+    <script>
+        function loadProxyUrl() {
+            // Get the URL from the hash (everything after #)
+            const hash = window.location.hash.substring(1);
+            
+            if (!hash) {
+                document.getElementById('proxy-frame').style.display = 'none';
+                document.getElementById('error-message').style.display = 'block';
+                return;
+            }
 
-<script>
-(async () => {
-  // 1️⃣ register UV service worker
-  if ('serviceWorker' in navigator) {
-    await navigator.serviceWorker.register('/active/sw.js', {
-      scope: '/active/'
-    });
-  }
+            // Decode the URL in case it's encoded
+            const targetUrl = decodeURIComponent(hash);
+            
+            // Load the URL in the iframe
+            // Assuming your proxy processes URLs through the /service/ path
+            // Adjust this path based on your proxy configuration
+            const proxyUrl = '/service/' + encodeURIComponent(targetUrl);
+            document.getElementById('proxy-frame').src = proxyUrl;
+            
+            document.getElementById('proxy-frame').style.display = 'block';
+            document.getElementById('error-message').style.display = 'none';
+        }
 
-  // 2️⃣ read hash
-  const target = location.hash.slice(1);
-  if (!target) return;
+        // Load URL on page load
+        loadProxyUrl();
 
-  // 3️⃣ normalize URL
-  let url;
-  try {
-    url = new URL(target.startsWith('http') ? target : 'https://' + target).href;
-  } catch {
-    return;
-  }
-
-  // 4️⃣ encode with UV
-  const encoded = __uv$config.prefix + __uv$config.encodeUrl(url);
-
-  // 5️⃣ MUST load under /active/ scope
-  document.getElementById('frame').src = '/active/' + encoded;
-})();
-</script>
-
+        // Reload if hash changes
+        window.addEventListener('hashchange', loadProxyUrl);
+    </script>
 </body>
 </html>
